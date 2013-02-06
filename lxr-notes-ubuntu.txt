@@ -1,0 +1,259 @@
+Bringing up LXR on Ubuntu
+Feb 25 2008
+Fred Koehler
+
+LXR is a web based source code browser which has been used to index a
+number of open source projects including Linux, Mac OS and Perl.  LXR
+is implemented with a variety of components such as Perl, CPAN, Xapian
+PostgreSQL and Excuberant Ctags.  LXR's web site is http://lxr.linux.no.
+
+Below is my experience in installing LXR and using it to index a small
+code tree.  The purpose of the writeup is to help others in using this
+technology for their own projects.  As LXR is a developing technology,
+the documentation is rather sparse.  Hopefully these instructions will
+help others to bring up LXR on their code trees.
+
+The instructions here apply to bringing up LXR on a fresh install of
+Ubuntu 7.10 on a Intel based PC.  LXR may also be installed on other
+flavors of Linux as LXR uses open source components.  However the
+methods to install the various components may differ amoung various
+Linux flavors.
+
+Before following these instructions, it is best to read LXR's
+installation instructions which will better lay the context for these
+instructions.
+
+
+Initial Linux setup
+===================
+
+During my installation of Ubuntu 7.10 desktop version, a user account
+named 'guest' was created.  This account was given administrative
+privileges.  These steps are not required by LXR.
+
+*) Fixed clock to use internet time servers.  This is not strictly
+ needed for LXR, but I like my clock to be working correctly.
+
+*) Interesting that Ubuntu's install does not require the setting of
+ root's password.  So it needs to be set which can be done from
+ Sytems->Administration->Users and Groups
+
+*) I use Emacs, so I installed the latest version.  Not required for
+LXR.  System->Administrator->Synaptic Package Manager for installing
+emacs22-gtk 22.1-0ubuntu5.1
+
+
+Installing Packages
+===================
+
+As stated above, LXR uses various components.  LXR's installation
+instructions give a guide to what is needed.  What follows is the
+exact steps needed to install the required packages on this version of
+Ubuntu Linux.
+
+*) using System->Administrator->Synaptic Package Manager install:
+
+ apache2 2.2.4-3ubuntu0.1
+ apache2-doc 2.2.4-3ubuntu0.1
+ exuberant-ctags version 1:5.7-1
+ git-core 1:1.5.2.5-2build1
+ inkscape 0.45.1-lubuntu5
+ libapache2-mod-perl2 2.0.2-2.4ubuntul
+ libcgi-ajax-perl version 0.697-1
+ libcgi-simple-perl   version 0.080-1
+ libdbd-pg-pearl version 1.49-2build1
+ libdevel-size-perl 0.66-1
+ libhtml-parser-perl version 3.56-1 (already installed!)
+ libsearch-xapian-perl 1.0.0.0-1
+ libtemplate-perl version 2.19-1
+ libterm-progressbar-perl 2.09-5
+ postgresql 8.2.6-0ubuntu0.7.10.1
+ texlive 2007-10
+ xapian-tools version 1.0.2-lubuntul
+
+Get LXR code
+============
+
+The LXR code is retrieved from their source code repository.  The LXR
+team uses GIT.  TODO: Working with the LXR team to understand release
+versions etc.
+
+*) Use git to get the latest version of lxr.
+
+    git clone git://lxr.linux.no/git/lxrng.git
+
+guest@lxr:~$ git clone git://lxr.linux.no/git/lxrng.git
+Initialized empty Git repository in /home/guest/lxrng/.git/
+remote: Generating pack...
+remote: Done counting 674 objects.
+remote: Deltifying 674 objects...
+remote:  100% (674/674) done
+Indexing 674 objects...
+remote: Total 674 (delta 360), reused 0 (delta 0)
+ 100% (674/674) done
+Resolving 360 deltas...
+ 100% (360/360) done
+
+As "git clone ..." was run from guest's home directory, LXR ends up
+being installed in /home/guest/lxrng.
+
+
+PostgreSQL
+==========
+
+*) The install of PostgreSQL created a user account named postgres.
+ The next step is to create the database.  But the commands need to be
+ executed from the postgres user account which was created during the
+ PostgreSQL install.  Not sure of the password to the postgres
+ account, so su to root and change postgres's password.
+
+*) Execute the 'createdb lxrng', 'createuser guest' and 'createuser
+ www-data' from the postgres account.
+
+guest@lxr:~$ su postgres
+Password: 
+postgres@lxr:/home/guest$ whoami
+postgres
+postgres@lxr:/home/guest$ createdb lxrng
+CREATE DATABASE
+postgres@lxr:/home/guest$ createuser guest
+Shall the new role be a superuser? (y/n) n
+Shall the new role be allowed to create databases? (y/n) n
+Shall the new role be allowed to create more new roles? (y/n) n
+CREATE ROLE
+postgres@lxr:/home/guest$ createuser www-data
+Shall the new role be a superuser? (y/n) n
+Shall the new role be allowed to create databases? (y/n) n
+Shall the new role be allowed to create more new roles? (y/n) n
+CREATE ROLE
+
+LXR Configuration
+=================
+
+The lxrng.conf is a Perl file that specifies how LXR operates.  This
+file must be edited to the particulars for your codebase.  The LXR
+distribution contains a sample file named lxrng.conf-dist.
+
+*) copy lxrng.conf-dist to lxrng.conf, then edit appropriately.  See
+ below for a guide on how to make the edits.
+
+LXR suppoerts two mechanisms for specifying the code base.  One
+mechanism works with the source code control system GIT.  The other
+mechanism allows the specification of a directory that contains the
+source code, which is called "plain respository".
+
+In this example, the "plain repository" technique is used.  A "plain
+repository" is a file repository where the root path points to a
+directory containing subdirectories named according the version of the
+codebase they contain. Each subdirectory contains the entire code base
+for that version, as regular files and directories.  For example
+suppose the top level name of your code base is "mytree".  Then under
+mytree, there should be subdirectories containing various versions of
+mytree (1.0, 1.1, 2.0 etc.)
+
+In lxrng.conf, we include the LXRng::Repo::Plain Perl library and
+specify the path to the source code tree:
+
+       use LXRng::Repo::Plain;
+       my $plainrepo = LXRng::Repo::Plain->
+       	  	     new('/home/guest/code/mytree');
+
+The variables associated with GIT are commented out.
+
+       #my $gitrepo = LXRng::Repo::Git
+       #    ->new('/var/lib/lxrng/repos/linux-2.6/.git',
+       #	  release_re => qr/^v[^-]*$/,
+       #	  author_timestamp => 0);
+
+Next, specify the path for the Xapian files.  Xapian is a tool that
+provides advanced indexing and search facilities.  In this example the
+directory is called textdb and lives under /home/guest/code:
+
+       my $search  = LXRng::Search::Xapian->
+	     		 new('/home/guest/code/textdb');
+
+Next we need to specify the name of the tree, which will be known as
+the tree-id.  This is specified as a top level key in the hash that is
+returned by lxrng.conf.  In this example, we call it "mytree":
+
+	 return {
+	     'mytree' => {
+	     	'repository'  => $plainrepo,
+
+Note the repository is assigned as well to what we specified above
+($plainrepo).  The tree-id, in this case "mytree", is the argument
+that we'll pass to other LXR Perl scripts.  Note that it is possible
+to define several codebases by specifying other top-level keys and
+specifying the components below it.
+
+The base_url specifies the URL that will prefix the URL path while a
+user is navigating through source code using LXR.  In this example we
+are just using setting up for local browsing.  This is easy to extend
+to access from other computers.
+
+	'base_url'    => 'http://localhost',
+
+Next is specifying the versions of the code tree that we want indexed.
+Our code base (mytree) has two subdirectories called 1.0 and 1.1:
+
+	'ver_list'    => ['1.1', 1.0],
+	'ver_default' => '1.1',
+
+TODO: explain the include-map (first I need to understand it)
+
+Other stuff
+===========
+
+*) create the directory for the location of the textdb for xapian
+
+guest@lxr:~$ mkdir /mnt/guest/code/textdb
+
+*) create the httpd lxrng cache directory (see lxrng.conf) and make
+ sure the httpd can write to it.
+
+guest@lxr:~$ su
+Password: 
+root@lxr:/home/guest# mkdir -p /var/lib/lxrng/cache
+root@lxr:/home/guest# chmod a+rw /var/lib/lxrng
+root@lxr:/home/guest# chmod a+rw /var/lib/lxrng/cache
+
+*) make -C /home/guest/lxrng/webroot/.static/gfx
+make: Entering directory `/home/guest/lxrng/webroot/.static/gfx'
+make: Nothing to be done for `all'.
+make: Leaving directory `/home/guest/lxrng/webroot/.static/gfx'
+
+
+Executing LXR (indexing the source code)
+========================================
+
+*) execute lxr-db-admin mytree --init
+
+*) execute lxr-genxref mytree
+
+
+Apache
+======
+
+LXR provides two example apache configuration files
+(apache2-site.conf-dist-cgi and apache2-site.conf-dist-mod_perl).  You
+can choose whichever one suites your needs.  Both work.
+
+We defined @@LXRURL@@ to be "".
+We defined @@LXRROOT@@ to be /home/guest/lxrng
+
+It is important to uncomment one of the ScriptAlias lines.  As this
+example used the web site root, the first ScriptAlias line was
+uncommented:
+
+# For LXRng installed directly in the web site root, use
+   ScriptAlias /            "/home/guest/lxrng/webroot/lxr.cgi/"
+# otherwise use (no trailing slash):
+#   ScriptAlias /  "/home/guest/lxrng/webroot/lxr.cgi"
+
+
+*) After editing apache2.conf, execute the following commands as root
+
+  # ln -s /home/guest/lxrng/apache2-site.conf /etc/apache2/sites-enabled/010-lxrng
+  # /etc/init.d/apache2 reload
+
+*) Point the browser to http://localhost and you'll see lxr in action!
